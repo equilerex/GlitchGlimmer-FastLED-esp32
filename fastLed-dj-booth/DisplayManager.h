@@ -12,10 +12,6 @@ public:
 
     void showStartupScreen();
 
-    // Mode update methods
-    void updateMode(const String& modeName); // Simple overload
-    void updateMode(const String& modeName, bool isAuto, int index, int total);
-
     // Visual elements
     void drawVolumeBar(double volume);
     void drawTriggerIcons(const AudioFeatures& features);
@@ -25,7 +21,6 @@ public:
     void drawBPMRing(bool beatDetected);
 
     // Full screen visual update
-    void updateAudioVisualization(const AudioFeatures& features);
     void updateAudioVisualization(const AudioFeatures& features, HybridController* hybrid);
 
 private:

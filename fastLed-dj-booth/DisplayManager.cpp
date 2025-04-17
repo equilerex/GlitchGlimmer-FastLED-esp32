@@ -1,12 +1,9 @@
 
 #include "DisplayManager.h"
 #include "HybridController.h"
-#include "ModeManager.h"
 #include "Config.h"
 #include <Arduino.h>
 
-// External reference to the global modeManager instance
-extern ModeManager modeManager;
 
 DisplayManager::DisplayManager(TFT_eSPI &display)
     : _tft(display), ringRadius(30), ringFade(0), smoothedBPM(0), bpmSmoothingFactor(0.1) {
@@ -21,23 +18,6 @@ void DisplayManager::showStartupScreen() {
     _tft.setTextSize(1);
     _tft.setCursor(20, 60);
     _tft.print("Initializing...");
-}
-
-void DisplayManager::updateMode(const String& modeName) {
-    lastModeName = modeName;
-}
-
-void DisplayManager::updateMode(const String& modeName, bool isAuto, int index, int total) {
-    lastModeName = modeName;
-    _tft.fillRect(0, 0, 240, 30, TFT_NAVY);
-    _tft.setTextSize(2);
-    _tft.setTextColor(TFT_WHITE);
-    _tft.setCursor(5, 7);
-    _tft.print(modeName);
-
-    _tft.setTextSize(1);
-    _tft.setCursor(180, 12);
-    _tft.printf("%d/%d", index + 1, total);
 }
 
 void DisplayManager::drawFFTWaterfall(const double* fft, int bins) {
@@ -78,15 +58,21 @@ void DisplayManager::updateAudioVisualization(const AudioFeatures& features, Hyb
     _tft.setTextSize(2);
     _tft.setTextColor(TFT_WHITE);
     _tft.setCursor(5, 7);
+
+
+
     if (hybrid) {
         _tft.print(hybrid->getCurrentName());
     } else {
-        _tft.print(lastModeName);
+        _tft.print("wtf");
     }
 
+
+
+
     // Progress indicator
-    int total = hybrid ? hybrid->getAnimationCount() : modeManager.getModeCount();
-    int current = hybrid ? hybrid->getCurrentIndex() + 1 : modeManager.getCurrentIndex() + 1;
+    int total = hybrid ? hybrid->getAnimationCount() : 0;
+    int current = hybrid ? hybrid->getCurrentIndex() + 1 : 0;
     _tft.setTextSize(1);
     _tft.setCursor(180, 12);
     _tft.printf("%d/%d", current, total);
@@ -95,7 +81,7 @@ void DisplayManager::updateAudioVisualization(const AudioFeatures& features, Hyb
     _tft.fillRoundRect(5, 35, 70, 20, 4, 0x0320);  // Dark green
     _tft.setTextColor(TFT_WHITE);
     _tft.setCursor(12, 40);
-    _tft.print(hybrid ? "HYBRID" : "MANUAL");
+    _tft.print(hybrid.autoSwitchEnabled ? "Auto" : "MANUAL");
 
     // BPM Display with visual indicator
     _tft.fillRoundRect(85, 35, 70, 20, 4, features.beatDetected ? TFT_RED : 0x0492);  // Dark cyan
@@ -134,10 +120,6 @@ void DisplayManager::updateAudioVisualization(const AudioFeatures& features, Hyb
     drawFFTWaterfall(features.spectrum, NUM_SAMPLES / 2);
 }
 
-void DisplayManager::updateAudioVisualization(const AudioFeatures& features) {
-    updateAudioVisualization(features, nullptr);
-}
-
 void DisplayManager::drawWaveform(const int16_t* waveform, int samples) {
     const int START_X = 101;
     const int START_Y = 95;
@@ -158,10 +140,11 @@ void DisplayManager::drawWaveform(const int16_t* waveform, int samples) {
     }
 }
 
-void DisplayManager::drawVolumeBar(double volume) {
-    int barHeight = (int)(volume * 100);
-    _tft.fillRect(220, 100 - barHeight, 10, barHeight, TFT_GREEN);
-}
+
+
+
+
+// unused?
 
 void DisplayManager::drawTriggerIcons(const AudioFeatures& features) {
     if (features.beatDetected) {
@@ -179,6 +162,7 @@ void DisplayManager::drawBPM(int bpm) {
     _tft.printf("BPM: %d", (int)smoothedBPM);
 }
 
+
 void DisplayManager::drawBPMRing(bool beatDetected) {
     if (beatDetected) {
         ringFade = 255;
@@ -188,4 +172,10 @@ void DisplayManager::drawBPMRing(bool beatDetected) {
         _tft.drawCircle(220, 20, ringRadius, _tft.color565(ringFade, ringFade, ringFade));
         ringFade = max(0, ringFade - 20);
     }
+}
+
+
+void DisplayManager::drawVolumeBar(double volume) {
+    int barHeight = (int)(volume * 100);
+    _tft.fillRect(220, 100 - barHeight, 10, barHeight, TFT_GREEN);
 }

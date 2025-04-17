@@ -16,14 +16,20 @@ public:
     HybridController();
     void addAnimation(HybridAnimation animation, const String& name);
     void update(CRGB* leds, int numLeds, const AudioFeatures& features);
+    void resetToFirst();
+    bool autoSwitchEnabled = true;
+    void enableAutoSwitching();
+    void disableAutoSwitching();
+    void debugLog(const String& message);
+
     String getCurrentName();
     int getCurrentIndex();
     int getAnimationCount();
     float getAverageVolume();
+
     bool getBuildUpFlag();
     bool getDropFlag();
-    void resetToFirst();
-    void prevMode();
+    void switchAnimation();
 
 private:
     HybridAnimation animations[HYBRID_ANIM_COUNT];
@@ -31,18 +37,21 @@ private:
     int currentIndex;
     int animationCount;
     unsigned long lastSwitch;
-    float avgVolume;
+
     float volumeHistory[10];
     int volumePos;
+    float avgVolume;
+    float smoothedVolume;
+    int debounceCounter;
     bool buildUp;
     bool drop;
 
     bool isBuildUp();
     bool isDrop();
     bool shouldSwitch(const AudioFeatures& features);
-    void switchAnimation();
-    float smoothedVolume;     // For volume smoothing
-    int debounceCounter;      // For stable beat detection
+
+    String modeSwapReason = "Init";
+    String modeKeepReason = "Init";
 };
 
 #endif

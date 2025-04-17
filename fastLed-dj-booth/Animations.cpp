@@ -1,5 +1,8 @@
 #include "Animations.h"
 #include "Config.h"  // where NUM_LEDS is defined
+#include <vector>
+// Declare drips globally if needed across multiple functions
+static std::vector<int> drips;
 
 // Firestorm: Flames that pulse harder with bass
 void firestormAnimation(CRGB* leds, int numLeds, const AudioFeatures& features) {

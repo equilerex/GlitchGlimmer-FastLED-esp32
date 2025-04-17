@@ -12,5 +12,7 @@
 #define LED_PIN 25
 #define BTN_PIN 0
 #define BACKLIGHT_PIN 4
-#define HYBRID_ANIM_COUNT 16  // Or whatever number fits your memory & needs
+// Synchronize this count with the number of animations defined in the animations[] array in Animations.h will fail build if mismatching
+#define HYBRID_ANIM_COUNT 14
+
 #endif
