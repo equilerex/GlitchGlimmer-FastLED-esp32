@@ -16,7 +16,6 @@ public:
     HybridController();
     void addAnimation(HybridAnimation animation, const String& name);
     void update(CRGB* leds, int numLeds, const AudioFeatures& features);
-    void resetToFirst();
     void switchAnimation();
     void enableAutoSwitching();
     void disableAutoSwitching();
@@ -29,12 +28,12 @@ public:
     float getAverageVolume();
     bool getBuildUpFlag();
     bool getDropFlag();
+    bool isAutoSwitchEnabled() const; // Getter for autoSwitchEnabled
+    void setAutoSwitchEnabled(bool enabled); // Setter for autoSwitchEnabled
 
     // Debug/Display reasons
     String getModeSwapReason() const;
     String getModeKeepReason() const;
-
-    bool autoSwitchEnabled = true;
 
 private:
     HybridAnimation animations[HYBRID_ANIM_COUNT];
@@ -50,6 +49,7 @@ private:
     int debounceCounter;
     bool buildUp;
     bool drop;
+    bool autoSwitchEnabled = true; // Move to private
 
     bool isBuildUp();
     bool isDrop();

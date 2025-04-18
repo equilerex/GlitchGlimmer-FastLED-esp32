@@ -18,7 +18,7 @@ DisplayManager displayManager(tft);
 HybridController hybridController;
 
 void setup() {
- // Serial.begin(9600);
+ Serial.begin(9600);
 
   // Initialize LEDs
   FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
@@ -30,6 +30,7 @@ void setup() {
   pinMode(BACKLIGHT_PIN, OUTPUT);
   digitalWrite(BACKLIGHT_PIN, HIGH);
   displayManager.showStartupScreen();
+    delay(2000); // Wait for 2 seconds
 
   // Initialize Audio
   audioProcessor.begin();
@@ -51,17 +52,13 @@ void registerAnimations() {
 }
 
 void setupButtons() {
-  nextModeBtn.setPressedHandler([](Button2 &btn) {
-    hybridController.switchAnimation();
-  });
+    nextModeBtn.setPressedHandler([](Button2 &btn) {
+        hybridController.switchAnimation();
+    });
 
- autoModeBtn.setPressedHandler([](Button2 &btn) {
-   if (hybridController.autoSwitchEnabled) {
-     hybridController.disableAutoSwitching();
-   } else {
-     hybridController.enableAutoSwitching();
-   }
-  });
+    autoModeBtn.setPressedHandler([](Button2 &btn) {
+        hybridController.setAutoSwitchEnabled(!hybridController.isAutoSwitchEnabled());
+    });
 }
 
 void loop() {
@@ -76,7 +73,7 @@ void loop() {
   hybridController.update(leds, NUM_LEDS, features);
 
   // Update the Display
-  displayManager.updateAudioVisualization(features, &hybridController);
-
+  displayManager.updateAudioVisualization(features);
+  delay(100); // Update interval
   FastLED.show();
 }

@@ -2,7 +2,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define AUDIO_DEBUG false
+#define AUDIO_DEBUG true
 #define MODE_DEBUG false
 
 

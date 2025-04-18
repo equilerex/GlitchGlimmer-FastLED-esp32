@@ -42,7 +42,7 @@ void AudioProcessor::begin() {
 
 void AudioProcessor::captureAudio() {
     size_t bytesRead = 0;
-    int32_t i2sBuffer[NUM_SAMPLES];
+    static int32_t i2sBuffer[NUM_SAMPLES]; // Static buffer to avoid stack overuse
     i2s_read(I2S_PORT, (void*)i2sBuffer, sizeof(i2sBuffer), &bytesRead, portMAX_DELAY);
     int samplesRead = bytesRead / sizeof(int32_t);
 
@@ -53,21 +53,21 @@ void AudioProcessor::captureAudio() {
         buffer[i] = (int16_t)(normalized * 32767);  // For waveform
     }
 
-    // Fallback fill if not enough samples
-    for (int i = samplesRead; i < NUM_SAMPLES; i++) {
-        vReal[i] = 0.0;
-        vImag[i] = 0.0;
-        buffer[i] = 0;
+    // Fallback fill
+    if (samplesRead < NUM_SAMPLES) {
+        memset(vReal + samplesRead, 0, (NUM_SAMPLES - samplesRead) * sizeof(double));
+        memset(vImag + samplesRead, 0, (NUM_SAMPLES - samplesRead) * sizeof(double));
+        memset(buffer + samplesRead, 0, (NUM_SAMPLES - samplesRead) * sizeof(int16_t));
     }
 }
 
 AudioFeatures AudioProcessor::analyzeAudio() {
     AudioFeatures features = {};
 
-    // Calculate RMS volume
+    // Volume (RMS)
     double sumSquares = 0.0;
     for (int i = 0; i < NUM_SAMPLES; i++) {
-        vReal[i] = constrain(vReal[i], -1.0f, 1.0f);  // Clamp inputs
+        vReal[i] = constrain(vReal[i], -1.0f, 1.0f);
         sumSquares += vReal[i] * vReal[i];
     }
 
@@ -75,14 +75,11 @@ AudioFeatures AudioProcessor::analyzeAudio() {
     normalizedVolume = gainSmoothing * normalizedVolume + (1 - gainSmoothing) * rawVolume;
     features.volume = normalizedVolume;
 
-    // loudness (with smoothing)
-    // Loudness mapped to a smoother 0–100 scale
+    // Loudness: scale volume to 0–100
     static float smoothedLoudness = 0;
-    float rawLoudness = features.volume * 100.0;  // scale RMS to 0–100
-    smoothedLoudness = 0.9 * smoothedLoudness + 0.1 * rawLoudness;
+    float rawLoudness = features.volume * 100.0f;
+    smoothedLoudness = 0.9f * smoothedLoudness + 0.1f * rawLoudness;
     features.loudness = constrain(smoothedLoudness, 0, 100);
-
-    //Serial.printf("Raw Volume: %.2f | Smoothed: %.2f | dB: %.2f\n", rawVolume, normalizedVolume, smoothedLoud);
 
     // Beat detection
     double volumeChange = features.volume - previousVolume;
@@ -106,52 +103,33 @@ AudioFeatures AudioProcessor::analyzeAudio() {
         FFT->complexToMagnitude();
     }
 
-    // Preview first few spectrum bins
-    String spectrumLog = "Spectrum[0-10]: ";
-    for (int i = 0; i < 10; i++) {
-        spectrumLog += String(vReal[i], 2) + " ";
-    }
-    //Serial.println(spectrumLog);
+    // Copy FFT spectrum
+    memcpy(features.spectrum, vReal, sizeof(double) * (NUM_SAMPLES / 2));
 
-    // ---- Frequency bands ----
-    //Serial.println(">> Entering frequency band calculation...");
-
-    // Copy spectrum
-    for (int i = 0; i < NUM_SAMPLES / 2; i++) {
-        features.spectrum[i] = vReal[i];
-    }
-
+    // Frequency band bin mapping
     int bassLimit = (int)(200.0 * NUM_SAMPLES / SAMPLE_RATE);
-    int midLimit = (int)(2000.0 * NUM_SAMPLES / SAMPLE_RATE);
+    int midLimit  = (int)(2000.0 * NUM_SAMPLES / SAMPLE_RATE);
+    int trebleLimit = NUM_SAMPLES / 2;
 
     double bassSum = 0.0, midSum = 0.0, trebleSum = 0.0;
 
-    for (int i = 0; i < bassLimit; i++) {
-        bassSum += vReal[i];
-    }
+    for (int i = 0; i < bassLimit; i++) bassSum += vReal[i];
+    for (int i = bassLimit; i < midLimit; i++) midSum += vReal[i];
+    for (int i = midLimit; i < trebleLimit; i++) trebleSum += vReal[i];
 
-    for (int i = bassLimit; i < midLimit; i++) {
-        midSum += vReal[i];
-    }
+    // Normalize for display (0.0 – 1.0)
+    features.bass = constrain((bassSum / bassLimit) / 100.0, 0.0, 1.0);
+    features.mid  = constrain((midSum / (midLimit - bassLimit)) / 80.0, 0.0, 1.0);
+    features.treble = constrain((trebleSum / (trebleLimit - midLimit)) / 50.0, 0.0, 1.0);
 
-    for (int i = midLimit; i < NUM_SAMPLES / 2; i++) {
-        trebleSum += vReal[i];
-    }
-
-    features.bass   = bassLimit > 0 ? bassSum / bassLimit : 0.0;
-    features.mid    = (midLimit - bassLimit) > 0 ? midSum / (midLimit - bassLimit) : 0.0;
-    features.treble = (NUM_SAMPLES / 2 - midLimit) > 0 ? trebleSum / (NUM_SAMPLES / 2 - midLimit) : 0.0;
-
-    #if AUDIO_DEBUG
-        Serial.printf("Bands | Bass: %.2f | Mid: %.2f | Treble: %.2f\n",
-                    features.bass, features.mid, features.treble);
-
-    #endif
+#if AUDIO_DEBUG
+    Serial.printf("Bands | Bass: %.2f | Mid: %.2f | Treble: %.2f\n",
+                  features.bass, features.mid, features.treble);
+#endif
 
     previousVolume = features.volume;
     return features;
 }
-
 
 const double* AudioProcessor::getFFTData() const {
     return vReal;

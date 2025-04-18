@@ -16,7 +16,7 @@ struct AudioFeatures {
     double treble;
     bool beatDetected;
     float bpm;
-    float loudness;
+    int loudness;
     double spectrum[NUM_SAMPLES / 2];
     int16_t waveform[NUM_SAMPLES];
 };

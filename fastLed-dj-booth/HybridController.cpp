@@ -109,7 +109,7 @@ bool HybridController::shouldSwitch(const AudioFeatures& features) {
     }
 
     if (!enoughTimePassed) {
-        modeKeepReason = "Too early";
+        modeKeepReason = "...";
         return false;
     }
 
@@ -130,10 +130,8 @@ void HybridController::switchAnimation() {
         // In manual mode, move to the next animation in sequence
         newIndex = (currentIndex + 1) % animationCount;
     } else {
-        // In automatic mode, pick a random animation (but avoid the current one)
-        while (newIndex == currentIndex) {
-            newIndex = random(animationCount);
-        }
+        // In automatic mode, pick a random animation
+        newIndex = random(animationCount);
     }
 
     // Update the current animation
@@ -143,23 +141,17 @@ void HybridController::switchAnimation() {
     debugLog("Switched animation");
 }
 
-
-void HybridController::enableAutoSwitching() {
-    autoSwitchEnabled = true;
-    debugLog("Auto-switching ENABLED");
+bool HybridController::isAutoSwitchEnabled() const {
+    return autoSwitchEnabled;
 }
 
-void HybridController::disableAutoSwitching() {
-    autoSwitchEnabled = false;
-    debugLog("Auto-switching DISABLED");
+
+
+void HybridController::setAutoSwitchEnabled(bool enabled) {
+    autoSwitchEnabled = enabled;
+    debugLog(enabled ? "Auto-switching ENABLED" : "Auto-switching DISABLED");
 }
 
-void HybridController::resetToFirst() {
-    currentIndex = 0;
-    lastSwitch = millis();
-    debounceCounter = 0;
-    debugLog("Reset to first animation");
-}
 
 void HybridController::update(CRGB* leds, int numLeds, const AudioFeatures& features) {
     debugLog("Update called");
