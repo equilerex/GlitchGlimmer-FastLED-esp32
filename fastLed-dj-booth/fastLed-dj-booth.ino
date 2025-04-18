@@ -7,6 +7,7 @@
 #include "Animations.h"
 #include "DisplayManager.h"
 #include "HybridController.h"
+ 
 
 // Hardware
 CRGB leds[NUM_LEDS];
@@ -95,6 +96,9 @@ void loop() {
 
     Serial.println("FastLED.show()");
     FastLED.show();
+
+    // Monitor memory usage
+    Serial.printf("Free Heap: %d\n", ESP.getFreeHeap());  
 
     Serial.println("=== LOOP END ===");
     delay(100); // Update interval

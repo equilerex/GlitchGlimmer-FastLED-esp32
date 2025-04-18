@@ -15,41 +15,62 @@ public:
         : label(lbl), value(val), theme(themeRef), beatPulse(pulse) {}
 
     void draw(TFT_eSPI& tft, int x, int y, int width, int height) override {
-        Serial.printf("[VerticalBarWidget] draw: %s=%.2f at (%d,%d,%d,%d)\n", label.c_str(), value, x, y, width, height);
+        Serial.printf("[VerticalBarWidget] draw: %s=%.2f at (%d,%d,%d,%d)\n", 
+                     label.c_str(), value, x, y, width, height);
+
+        // Safety checks
+        if (width <= 2 || height <= 2) {
+            Serial.println("[VerticalBarWidget] Invalid dimensions");
+            return;
+        }
+
         // Draw background
         tft.fillRect(x, y, width, height, theme.background);
 
-        // Clamp value to [0.0, 1.0]
-        float clampedValue = value;
-        if (clampedValue < 0.0f) clampedValue = 0.0f;
-        if (clampedValue > 1.0f) clampedValue = 1.0f;
+        // Clamp and calculate bar height
+        float clampedValue = (value < 0.0f) ? 0.0f : (value > 1.0f ? 1.0f : value);
+        int barHeight = static_cast<int>(clampedValue * (height - 2)); // Account for border
 
-        // Calculate bar height
-        int barHeight = static_cast<int>(clampedValue * height);
-        int barY = y + height - barHeight;
-
-        // Beat pulse effect (optional, can be triggered externally)
-        uint16_t barCol = theme.primary;
-        if (beatPulse) {
-            // Simple pulse: brighten the bar color
-            barCol = theme.accent;
+        // Draw the bar with border
+        if (barHeight > 0) {
+            uint16_t barCol = beatPulse ? theme.accent : theme.primary;
+            int barY = y + 1 + (height - 2 - barHeight); // Offset for border
+            tft.fillRect(x + 1, barY, width - 2, barHeight, barCol);
         }
 
-        // Draw the bar
-        tft.fillRect(x, barY, width, barHeight, barCol);
+        // --- Fixed Sprite Handling ---
+        TFT_eSprite sprite(&tft); // Stack-allocated
+        
+        // Validate dimensions before creating sprite
+        if (width <= 0 || height <= 0) {
+            Serial.println("[ERROR] Invalid dimensions for sprite");
+            return;
+        }
 
-        // Draw rotated label using a sprite
-        TFT_eSprite sprite = TFT_eSprite(&tft);
-        sprite.setColorDepth(8);
-        sprite.createSprite(height, width);
-        sprite.fillSprite(theme.background);
-        sprite.setTextColor(theme.text, theme.background);
-        sprite.setTextDatum(MC_DATUM);
-        sprite.setTextSize(1);
-        sprite.drawString(label, height / 2, width / 2);
-        sprite.pushRotated(270, theme.background); // Only angle and transparent color
-        sprite.pushSprite(x, y);          // Draw at correct position
-        sprite.deleteSprite();
+        // Create sprite with original orientation dimensions
+        if (!sprite.createSprite(width, height)) {
+            Serial.println("[ERROR] Failed to create sprite");
+            return;
+        }
+
+        try {
+            // Draw label in original orientation
+            sprite.fillSprite(theme.background);
+            sprite.setTextColor(theme.text, theme.background);
+            sprite.setTextDatum(MC_DATUM);
+            sprite.setTextSize(1);
+            
+            // Center in original dimensions
+            sprite.drawString(label, width/2, height/2);
+
+            // Single rotation operation with position
+            sprite.pushRotated(270, theme.background);
+        } 
+        catch (...) {
+            Serial.println("[ERROR] Sprite operation failed");
+        }
+
+        // Automatic cleanup - no delete needed for stack sprite
     }
 
     int getMinWidth() const override { return 20; }

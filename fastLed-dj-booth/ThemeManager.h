@@ -8,7 +8,8 @@ public:
     }
 
     static const WidgetColorTheme& get() {
-        return currentTheme;
+        static WidgetColorTheme instance; // Persistent static instance
+        return instance;
     }
 
 private:
