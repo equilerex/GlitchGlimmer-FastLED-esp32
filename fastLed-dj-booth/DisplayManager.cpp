@@ -1,64 +1,49 @@
 #include "DisplayManager.h"
 #include "HybridController.h"
 #include "Config.h"
-#include <Arduino.h>
 #include "AcronymValueWidget.h"
 #include "WaveformWidget.h"
 #include "VerticalBarWidget.h"
-// Include other widget headers as needed
+#include <Arduino.h>
+
+// Cyberpunk theme colors
+#define COLOR_PURPLE 0x780F
+#define COLOR_PINK   0xF81F
+#define COLOR_YELLOW 0xFFE0
+
+// Define custom WidgetColorTheme instances for color variety
+static WidgetColorTheme purpleTheme { TFT_PURPLE, TFT_WHITE, TFT_PINK, TFT_BLACK };
+static WidgetColorTheme pinkTheme   { TFT_PINK,   TFT_WHITE, TFT_YELLOW, TFT_BLACK };
+static WidgetColorTheme yellowTheme { TFT_YELLOW, TFT_BLACK, TFT_PINK,   TFT_BLACK };
+static WidgetColorTheme redTheme    { TFT_RED,    TFT_WHITE, TFT_YELLOW, TFT_BLACK };
+static WidgetColorTheme blueTheme   { TFT_BLUE,   TFT_WHITE, TFT_CYAN,   TFT_BLACK };
+static WidgetColorTheme orangeTheme { TFT_ORANGE, TFT_BLACK, TFT_YELLOW, TFT_BLACK };
+static WidgetColorTheme cyanTheme   { TFT_CYAN,   TFT_BLACK, TFT_WHITE,  TFT_BLACK };
+static WidgetColorTheme magentaTheme{ TFT_MAGENTA,TFT_WHITE, TFT_YELLOW, TFT_BLACK };
+
+// ReasonTextWidget with required methods
+class ReasonTextWidget : public Widget {
+    String label;
+    String reason;
+    const WidgetColorTheme& theme;
+public:
+    ReasonTextWidget(const String& lbl, const String& reasonText, const WidgetColorTheme& themeRef = ThemeManager::get())
+        : label(lbl), reason(reasonText), theme(themeRef) {}
+    void draw(TFT_eSPI& tft, int x, int y, int w, int h) override {
+        tft.fillRect(x, y, w, h, theme.background);
+        tft.setTextColor(theme.text, theme.background);
+        tft.setTextSize(1);
+        tft.setCursor(x, y);
+        tft.print(label + ": " + reason);
+    }
+    int getMinWidth() const override { return 120; }
+    int getMinHeight() const override { return 18; }
+    const WidgetColorTheme& getTheme() const override { return theme; }
+    int getTypeId() const override { return 5; }
+};
 
 DisplayManager::DisplayManager(TFT_eSPI &display)
-    : _tft(display), layout(display.width(), display.height()) {} // Properly initialize layout
-
-void DisplayManager::drawFFTWaterfall(const double* fft, int bins) {
-    const int START_X = 101;
-    const int START_Y = 95;
-    const int WIDTH = 128;
-    const int HEIGHT = 58;
-
-    int bandWidth = WIDTH / 16;
-    int binsPerBand = bins / 16;
-
-    for (int band = 0; band < 16; band++) {
-        double bandValue = 0;
-        for (int i = 0; i < binsPerBand; i++) {
-            bandValue += fft[band * binsPerBand + i];
-        }
-        bandValue /= binsPerBand;
-
-        int barHeight = constrain((int)(bandValue * HEIGHT / 50.0), 0, HEIGHT); // Normalized scale
-        _tft.fillRect(
-            START_X + (band * bandWidth),
-            START_Y - barHeight,
-            bandWidth - 1,
-            barHeight,
-            TFT_GREEN
-        );
-    }
-}
-
-void DisplayManager::drawWaveform(const int16_t* waveform, int samples) {
-    const int START_X = 101;
-    const int START_Y = 80; // Moved down by 20px
-    const int WIDTH = 100;
-    const int HEIGHT = 20;   // Shortened by 10px
-
-    for (int i = 0; i < WIDTH - 1 && i < samples - 1; i++) {
-        int index1 = map(i, 0, WIDTH - 1, 0, samples - 1);
-        int index2 = map(i + 1, 0, WIDTH - 1, 0, samples - 1);
-
-        int sample1 = map(waveform[index1], -32768, 32767, -HEIGHT / 2, HEIGHT / 2);
-        int sample2 = map(waveform[index2], -32768, 32767, -HEIGHT / 2, HEIGHT / 2);
-
-        _tft.drawLine(
-            START_X + i,
-            START_Y + sample1,
-            START_X + i + 1,
-            START_Y + sample2,
-            TFT_GREEN
-        );
-    }
-}
+    : _tft(display), layout(display.width(), display.height()) {}
 
 void DisplayManager::showStartupScreen() {
     _tft.fillScreen(TFT_BLACK);
@@ -71,27 +56,46 @@ void DisplayManager::showStartupScreen() {
     _tft.print("Initializing...");
 }
 
-void DisplayManager::updateAudioVisualization(const AudioFeatures& features) {
+void DisplayManager::updateAudioVisualization(const AudioFeatures& features, HybridController* hybrid) {
+    Serial.println("[DisplayManager] Drawing new frame");
     _tft.fillScreen(TFT_BLACK);
+    layout.clear();
 
-    // Clear previous widgets and re-initialize layout with correct size
-    layout = GridLayout(_tft.width(), _tft.height());
+    Serial.printf("[DisplayManager] features: vol=%.3f, bass=%.3f, mid=%.3f, treb=%.3f, beat=%d, bpm=%.2f, loud=%d\n",
+        features.volume, features.bass, features.mid, features.treble, features.beatDetected, features.bpm, features.loudness);
 
-    // Add vertical bar widgets for BASS, MID, TREB, PWR
-    layout.addWidget(new VerticalBarWidget("BASS", features.bass, TFT_BLUE));
-    layout.addWidget(new VerticalBarWidget("MID", features.mid, TFT_GREEN));
-    layout.addWidget(new VerticalBarWidget("TREB", features.treble, TFT_YELLOW));
-    layout.addWidget(new VerticalBarWidget("PWR", features.loudness / 100.0f, TFT_RED));
+    const WidgetColorTheme& pulseTheme = features.beatDetected ? pinkTheme : purpleTheme;
 
-    // Add other widgets
-    layout.addWidget(new AcronymValueWidget("BPM", static_cast<int>(features.bpm)));
-    layout.addWidget(new AcronymValueWidget("PWR", static_cast<int>(features.loudness)));
-    // ... add other widgets as needed
+    layout.addWidget(std::unique_ptr<VerticalBarWidget>(new VerticalBarWidget("BASS", features.bass, purpleTheme, true)));
+    layout.addWidget(std::unique_ptr<VerticalBarWidget>(new VerticalBarWidget("MID", features.mid, yellowTheme, true)));
+    layout.addWidget(std::unique_ptr<VerticalBarWidget>(new VerticalBarWidget("TREB", features.treble, pinkTheme, true)));
+    layout.addWidget(std::unique_ptr<VerticalBarWidget>(new VerticalBarWidget("PWR", features.loudness / 100.0f, redTheme, true)));
+    layout.addWidget(std::unique_ptr<AcronymValueWidget>(new AcronymValueWidget("BPM", static_cast<int>(features.bpm), pulseTheme)));
+    layout.addWidget(std::unique_ptr<AcronymValueWidget>(new AcronymValueWidget("PWR", static_cast<int>(features.loudness), purpleTheme)));
+    
+    // Explicitly check the waveform pointer
+    Serial.printf("[DisplayManager] Waveform pointer: %p\n", features.waveform);
+    if (!features.waveform) {
+        Serial.println("[DisplayManager] WARNING: Null waveform pointer in features!");
+    } else {
+        try {
+            layout.addWidget(std::unique_ptr<WaveformWidget>(new WaveformWidget(features.waveform, NUM_SAMPLES, magentaTheme, features.beatDetected)));
+            Serial.println("[DisplayManager] Added waveform widget successfully");
+        } catch (const std::exception& e) {
+            Serial.printf("[DisplayManager] Exception creating waveform widget: %s\n", e.what());
+        } catch (...) {
+            Serial.println("[DisplayManager] Unknown exception creating waveform widget");
+        }
+    }
 
-    // Add the waveform widget
-    layout.addWidget(new WaveformWidget(features.waveform, NUM_SAMPLES));
+    if (hybrid) {
+        layout.addWidget(std::unique_ptr<AcronymValueWidget>(new AcronymValueWidget("IDX", hybrid->getCurrentIndex() + 1, yellowTheme)));
+        layout.addWidget(std::unique_ptr<AcronymValueWidget>(new AcronymValueWidget("TOT", hybrid->getAnimationCount(), pinkTheme)));
+        layout.addWidget(std::unique_ptr<AcronymValueWidget>(new AcronymValueWidget(hybrid->isAutoSwitchEnabled() ? "AUTO" : "MAN", 1, blueTheme)));
+        layout.addWidget(std::unique_ptr<AcronymValueWidget>(new AcronymValueWidget("KEEP", 1, orangeTheme)));
+        layout.addWidget(std::unique_ptr<ReasonTextWidget>(new ReasonTextWidget("KEEP REASON", hybrid->getModeKeepReason(), cyanTheme)));
+    }
 
-    // Draw all widgets
-    layout.draw(_tft);
+    // Draw all widgets in a vertical stack (no direct access to widgets)
+    layout.drawVerticalStack(_tft);
 }
-

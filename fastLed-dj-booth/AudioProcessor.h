@@ -10,15 +10,15 @@
 
 
 struct AudioFeatures {
-    double volume;
-    double bass;
-    double mid;
-    double treble;
-    bool beatDetected;
-    float bpm;
-    int loudness;
-    double spectrum[NUM_SAMPLES / 2];
-    int16_t waveform[NUM_SAMPLES];
+    double volume = 0.0;
+    double bass = 0.0;
+    double mid = 0.0;
+    double treble = 0.0;
+    bool beatDetected = false;
+    double bpm = 0.0;
+    int loudness = 0;
+    double spectrum[NUM_SAMPLES/2] = {0};
+    const int16_t* waveform = nullptr;  // Initialize to nullptr
 };
 
 class AudioProcessor {

@@ -41,10 +41,15 @@ void AudioProcessor::begin() {
 }
 
 void AudioProcessor::captureAudio() {
+    Serial.println("[AudioProcessor] captureAudio() called");
     size_t bytesRead = 0;
     static int32_t i2sBuffer[NUM_SAMPLES]; // Static buffer to avoid stack overuse
     i2s_read(I2S_PORT, (void*)i2sBuffer, sizeof(i2sBuffer), &bytesRead, portMAX_DELAY);
     int samplesRead = bytesRead / sizeof(int32_t);
+
+    for (int i = 0; i < 10 && i < samplesRead; i++) {
+        Serial.printf("i2sBuffer[%d]=%ld\n", i, i2sBuffer[i]);
+    }
 
     for (int i = 0; i < samplesRead && i < NUM_SAMPLES; i++) {
         float normalized = i2sBuffer[i] / 8388608.0f;  // Normalize 24-bit signed PCM
@@ -59,10 +64,16 @@ void AudioProcessor::captureAudio() {
         memset(vImag + samplesRead, 0, (NUM_SAMPLES - samplesRead) * sizeof(double));
         memset(buffer + samplesRead, 0, (NUM_SAMPLES - samplesRead) * sizeof(int16_t));
     }
+    Serial.printf("[AudioProcessor] samplesRead: %d\n", samplesRead);
 }
 
 AudioFeatures AudioProcessor::analyzeAudio() {
+    Serial.println("[AudioProcessor] analyzeAudio() called");
     AudioFeatures features = {};
+    
+    // Set the waveform pointer to the buffer
+    features.waveform = buffer;
+    Serial.printf("[AudioProcessor] Setting waveform pointer: %p\n", (void*)features.waveform);
 
     // Volume (RMS)
     double sumSquares = 0.0;
@@ -80,6 +91,8 @@ AudioFeatures AudioProcessor::analyzeAudio() {
     float rawLoudness = features.volume * 100.0f;
     smoothedLoudness = 0.9f * smoothedLoudness + 0.1f * rawLoudness;
     features.loudness = constrain(smoothedLoudness, 0, 100);
+
+    Serial.printf("[AudioProcessor] After RMS: vol=%.3f, loud=%d\n", features.volume, features.loudness);
 
     // Beat detection
     double volumeChange = features.volume - previousVolume;
@@ -122,12 +135,15 @@ AudioFeatures AudioProcessor::analyzeAudio() {
     features.mid  = constrain((midSum / (midLimit - bassLimit)) / 80.0, 0.0, 1.0);
     features.treble = constrain((trebleSum / (trebleLimit - midLimit)) / 50.0, 0.0, 1.0);
 
+    Serial.printf("[AudioProcessor] After FFT: bass=%.3f, mid=%.3f, treb=%.3f\n", features.bass, features.mid, features.treble);
+
 #if AUDIO_DEBUG
     Serial.printf("Bands | Bass: %.2f | Mid: %.2f | Treble: %.2f\n",
                   features.bass, features.mid, features.treble);
 #endif
 
     previousVolume = features.volume;
+    Serial.printf("[AudioProcessor] Returning features: %p\n", (void*)&features);
     return features;
 }
 
