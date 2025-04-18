@@ -1,13 +1,10 @@
-
 #include "DisplayManager.h"
 #include "HybridController.h"
 #include "Config.h"
 #include <Arduino.h>
 
-
 DisplayManager::DisplayManager(TFT_eSPI &display)
-    : _tft(display), ringRadius(30), ringFade(0), smoothedBPM(0), bpmSmoothingFactor(0.1) {
-}
+    : _tft(display), ringRadius(30), ringFade(0), smoothedBPM(0), bpmSmoothingFactor(0.1) {}
 
 void DisplayManager::showStartupScreen() {
     _tft.fillScreen(TFT_BLACK);
@@ -49,6 +46,30 @@ void DisplayManager::drawFFTWaterfall(const double* fft, int bins) {
     }
 }
 
+void DisplayManager::drawWaveform(const int16_t* waveform, int samples) {
+    const int WIDTH = 240;
+    const int HEIGHT = 50;
+    const int CENTER_Y = 140;
+
+    for (int i = 0; i < WIDTH - 1 && i < samples - 1; i++) {
+        int16_t sample1 = waveform[i];
+        int16_t sample2 = waveform[i + 1];
+
+        int y1 = map(sample1, -32768, 32767, CENTER_Y - HEIGHT/2, CENTER_Y + HEIGHT/2);
+        int y2 = map(sample2, -32768, 32767, CENTER_Y - HEIGHT/2, CENTER_Y + HEIGHT/2);
+
+        _tft.drawLine(i, y1, i + 1, y2, TFT_CYAN);
+    }
+}
+
+void DisplayManager::drawDebugInfo(const String& reason) {
+    _tft.setTextSize(1);
+    _tft.setTextColor(TFT_LIGHTGREY);
+    _tft.setCursor(5, 190);
+    _tft.print("Keep Reason: ");
+    _tft.print(reason);
+}
+
 void DisplayManager::updateAudioVisualization(const AudioFeatures& features, HybridController* hybrid) {
     // Clear screen with a dark background
     _tft.fillScreen(TFT_BLACK);
@@ -58,124 +79,57 @@ void DisplayManager::updateAudioVisualization(const AudioFeatures& features, Hyb
     _tft.setTextSize(2);
     _tft.setTextColor(TFT_WHITE);
     _tft.setCursor(5, 7);
+    _tft.print(hybrid ? hybrid->getCurrentName() : "??");
 
 
-
-    if (hybrid) {
-        _tft.print(hybrid->getCurrentName());
-    } else {
-        _tft.print("wtf");
-    }
-
-
-
-
-    // Progress indicator
-    int total = hybrid ? hybrid->getAnimationCount() : 0;
+    // Mode info (auto/manual)
     int current = hybrid ? hybrid->getCurrentIndex() + 1 : 0;
+    int total = hybrid ? hybrid->getAnimationCount() : 0;
     _tft.setTextSize(1);
     _tft.setCursor(180, 12);
     _tft.printf("%d/%d", current, total);
 
-    // Mode type indicator (Manual/Hybrid)
-    _tft.fillRoundRect(5, 35, 70, 20, 4, 0x0320);  // Dark green
+    _tft.fillRoundRect(5, 35, 70, 20, 4, hybrid->autoSwitchEnabled ? TFT_GREEN : TFT_ORANGE);
     _tft.setTextColor(TFT_WHITE);
     _tft.setCursor(12, 40);
-    _tft.print(hybrid.autoSwitchEnabled ? "Auto" : "MANUAL");
+    _tft.print(hybrid->autoSwitchEnabled ? "AUTO" : "MANUAL");
 
-    // BPM Display with visual indicator
-    _tft.fillRoundRect(85, 35, 70, 20, 4, features.beatDetected ? TFT_RED : 0x0492);  // Dark cyan
+    // BPM
+    _tft.fillRoundRect(85, 35, 70, 20, 4, features.beatDetected ? TFT_RED : TFT_BLUE);
     _tft.setCursor(92, 40);
     _tft.printf("BPM:%d", (int)features.bpm);
 
-    // Volume Level
-    _tft.fillRoundRect(165, 35, 70, 20, 4, 0x7BEF);  // Dark grey
+    // PWR
+    _tft.fillRoundRect(165, 35, 70, 20, 4, TFT_DARKGREY);
     _tft.setCursor(172, 40);
-    _tft.printf("dB:%.2f", features.decibels);
+    _tft.printf("PWR:%d", (int)features.loudness);
 
-    // Audio levels visualization
-    // Bass level bar
+    // Spectrum Bars
     int bassHeight = constrain((int)(features.bass * 30), 0, 30);
-    _tft.fillRect(10, 65, 20, 30, 0x7BEF);  // Dark grey
+    _tft.fillRect(10, 65, 20, 30, TFT_DARKGREY);
     _tft.fillRect(10, 95 - bassHeight, 20, bassHeight, TFT_BLUE);
-    _tft.setCursor(8, 100);
-    _tft.print("BASS");
+    _tft.setCursor(8, 100); _tft.print("BASS");
 
-    // Treble level bar
     int trebleHeight = constrain((int)(features.treble * 30), 0, 30);
-    _tft.fillRect(40, 65, 20, 30, 0x7BEF);  // Dark grey
+    _tft.fillRect(40, 65, 20, 30, TFT_DARKGREY);
     _tft.fillRect(40, 95 - trebleHeight, 20, trebleHeight, TFT_YELLOW);
-    _tft.setCursor(35, 100);
-    _tft.print("TREB");
+    _tft.setCursor(35, 100); _tft.print("TREB");
 
-    // Mid level bar
     int midHeight = constrain((int)(features.mid * 30), 0, 30);
-    _tft.fillRect(70, 65, 20, 30, 0x7BEF);  // Dark grey
+    _tft.fillRect(70, 65, 20, 30, TFT_DARKGREY);
     _tft.fillRect(70, 95 - midHeight, 20, midHeight, TFT_GREEN);
-    _tft.setCursor(70, 100);
-    _tft.print("MID");
+    _tft.setCursor(70, 100); _tft.print("MID");
 
-    // FFT Waterfall
-    _tft.drawRect(100, 65, 130, 60, 0x7BEF);  // Dark grey border
+    _tft.drawRect(100, 65, 130, 60, TFT_DARKGREY);
     drawFFTWaterfall(features.spectrum, NUM_SAMPLES / 2);
+
+    // Draw waveform at bottom
+    drawWaveform(features.waveform, NUM_SAMPLES);
+
+    // Reason for keeping current mode
+    if (hybrid) drawDebugInfo(hybrid->getModeKeepReason());
 }
 
-void DisplayManager::drawWaveform(const int16_t* waveform, int samples) {
-    const int START_X = 101;
-    const int START_Y = 95;
-    const int WIDTH = 128;
-    const int HEIGHT = 58;
-
-    for (int i = 0; i < WIDTH && i < samples - 1; i++) {
-        int sample1 = map(waveform[i], -32768, 32767, -HEIGHT/2, HEIGHT/2);
-        int sample2 = map(waveform[i + 1], -32768, 32767, -HEIGHT/2, HEIGHT/2);
-
-        _tft.drawLine(
-            START_X + i,
-            START_Y + sample1,
-            START_X + i + 1,
-            START_Y + sample2,
-            TFT_GREEN
-        );
-    }
-}
-
-
-
-
-
-// unused?
-
-void DisplayManager::drawTriggerIcons(const AudioFeatures& features) {
-    if (features.beatDetected) {
-        _tft.fillCircle(220, 20, 5, TFT_RED);
-    } else {
-        _tft.fillCircle(220, 20, 5, TFT_DARKGREY);
-    }
-}
-
-void DisplayManager::drawBPM(int bpm) {
-    smoothedBPM = (smoothedBPM * (1 - bpmSmoothingFactor)) + (bpm * bpmSmoothingFactor);
-    _tft.setTextColor(TFT_WHITE);
-    _tft.setTextSize(1);
-    _tft.setCursor(180, 40);
-    _tft.printf("BPM: %d", (int)smoothedBPM);
-}
-
-
-void DisplayManager::drawBPMRing(bool beatDetected) {
-    if (beatDetected) {
-        ringFade = 255;
-    }
-
-    if (ringFade > 0) {
-        _tft.drawCircle(220, 20, ringRadius, _tft.color565(ringFade, ringFade, ringFade));
-        ringFade = max(0, ringFade - 20);
-    }
-}
-
-
-void DisplayManager::drawVolumeBar(double volume) {
-    int barHeight = (int)(volume * 100);
-    _tft.fillRect(220, 100 - barHeight, 10, barHeight, TFT_GREEN);
+void DisplayManager::updateAudioVisualization(const AudioFeatures& features) {
+    updateAudioVisualization(features, nullptr);
 }

@@ -13,12 +13,12 @@ CRGB leds[NUM_LEDS];
 TFT_eSPI tft = TFT_eSPI();
 Button2 nextModeBtn(BTN_PIN);
 Button2 autoModeBtn(35);
-AudioProcessor audioProcessor(I2S_WS, I2S_SD, I2S_SCK);
+AudioProcessor audioProcessor;
 DisplayManager displayManager(tft);
 HybridController hybridController;
 
 void setup() {
-  Serial.begin(9600);
+ // Serial.begin(9600);
 
   // Initialize LEDs
   FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
@@ -72,9 +72,11 @@ void loop() {
   audioProcessor.captureAudio();
   AudioFeatures features = audioProcessor.analyzeAudio();
 
-
+  // Update HybridController
   hybridController.update(leds, NUM_LEDS, features);
+
+  // Update the Display
   displayManager.updateAudioVisualization(features, &hybridController);
 
-FastLED.show();
+  FastLED.show();
 }

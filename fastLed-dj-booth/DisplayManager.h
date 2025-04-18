@@ -1,9 +1,9 @@
 #ifndef DISPLAY_MANAGER_H
 #define DISPLAY_MANAGER_H
 
-#pragma once
 #include <TFT_eSPI.h>
-class AudioFeatures;
+#include "AudioProcessor.h"
+
 class HybridController;
 
 class DisplayManager {
@@ -11,27 +11,20 @@ public:
     DisplayManager(TFT_eSPI &display);
 
     void showStartupScreen();
-
-    // Visual elements
-    void drawVolumeBar(double volume);
-    void drawTriggerIcons(const AudioFeatures& features);
-    void drawFFTWaterfall(const double* fft, int bins);
-    void drawWaveform(const int16_t* waveform, int samples);
-    void drawBPM(int bpm);
-    void drawBPMRing(bool beatDetected);
-
-    // Full screen visual update
     void updateAudioVisualization(const AudioFeatures& features, HybridController* hybrid);
+    void updateAudioVisualization(const AudioFeatures& features);
 
 private:
     TFT_eSPI& _tft;
     String lastModeName;
-
-    // BPM ring and smoothing
     int ringRadius;
     int ringFade;
     double smoothedBPM;
     double bpmSmoothingFactor;
+
+    void drawFFTWaterfall(const double* fft, int bins);
+    void drawWaveform(const int16_t* waveform, int samples);
+    void drawDebugInfo(const String& reason);
 };
 
 #endif

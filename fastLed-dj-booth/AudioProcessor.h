@@ -8,6 +8,7 @@
 
 #define I2S_PORT I2S_NUM_0
 
+
 struct AudioFeatures {
     double volume;
     double bass;
@@ -15,15 +16,16 @@ struct AudioFeatures {
     double treble;
     bool beatDetected;
     float bpm;
-float decibels;
+    float loudness;
     double spectrum[NUM_SAMPLES / 2];
-
+    int16_t waveform[NUM_SAMPLES];
 };
 
 class AudioProcessor {
 public:
-    AudioProcessor(int wsPin, int sdPin, int sckPin);
+    AudioProcessor();
     ~AudioProcessor();
+
     void begin();
     void captureAudio();
     AudioFeatures analyzeAudio();
@@ -34,16 +36,19 @@ public:
     float getNormalizedVolume() const;
 
 private:
-    int _wsPin, _sdPin, _sckPin;
+    // Audio processing
     double vReal[NUM_SAMPLES];
     double vImag[NUM_SAMPLES];
+    int16_t buffer[NUM_SAMPLES];  // Raw int waveform for display
     ArduinoFFT<double>* FFT;
-    int16_t buffer[NUM_SAMPLES];
+
+    // State
     double previousVolume;
     unsigned long lastBeatTime;
-	void drawSpectrum(const double* spectrum, int bins);
     float currentBPM;
     float normalizedVolume;
+
+    // Dynamic gain normalization
     float rollingMin = 1.0;
     float rollingMax = 0.0;
     float gainSmoothing = 0.95;

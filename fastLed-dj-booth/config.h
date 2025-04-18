@@ -2,6 +2,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define AUDIO_DEBUG false
+#define MODE_DEBUG false
+
+
 #define NUM_LEDS 60
 #define NUM_SAMPLES 512
 #define SAMPLE_RATE 44100

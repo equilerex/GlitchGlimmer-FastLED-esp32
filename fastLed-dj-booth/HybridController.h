@@ -5,7 +5,7 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include "AudioProcessor.h"
-#include "Config.h"  // 👈 Make sure this is included
+#include "Config.h"
 
 class AudioFeatures;
 
@@ -17,19 +17,24 @@ public:
     void addAnimation(HybridAnimation animation, const String& name);
     void update(CRGB* leds, int numLeds, const AudioFeatures& features);
     void resetToFirst();
-    bool autoSwitchEnabled = true;
+    void switchAnimation();
     void enableAutoSwitching();
     void disableAutoSwitching();
     void debugLog(const String& message);
 
+    // Accessors
     String getCurrentName();
     int getCurrentIndex();
     int getAnimationCount();
     float getAverageVolume();
-
     bool getBuildUpFlag();
     bool getDropFlag();
-    void switchAnimation();
+
+    // Debug/Display reasons
+    String getModeSwapReason() const;
+    String getModeKeepReason() const;
+
+    bool autoSwitchEnabled = true;
 
 private:
     HybridAnimation animations[HYBRID_ANIM_COUNT];

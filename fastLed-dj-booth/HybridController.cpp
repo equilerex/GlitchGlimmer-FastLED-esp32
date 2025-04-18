@@ -1,18 +1,19 @@
 #include "HybridController.h"
+#include "Config.h"
 
-#define DEBUG_ENABLED true // Set to false to disable debugging
 
 void HybridController::debugLog(const String& message) {
-    #if DEBUG_ENABLED
-        Serial.printf("%s | CurrentIndex: %d, AnimationCount: %d, AvgVolume: %.2f, BuildUp: %d, Drop: %d, DebounceCounter: %d\n",
-                      message.c_str(), currentIndex, animationCount, avgVolume, buildUp, drop, debounceCounter);
-    #endif
+#if MODE_DEBUG
+    Serial.printf("%s | Index: %d, Count: %d, Vol: %.3f, BuildUp: %d, Drop: %d, Debounce: %d, Reason: %s\n",
+                  message.c_str(), currentIndex, animationCount, avgVolume, buildUp, drop, debounceCounter,
+                  autoSwitchEnabled ? modeSwapReason.c_str() : modeKeepReason.c_str());
+#endif
 }
 
 HybridController::HybridController()
-  : currentIndex(0), animationCount(0), lastSwitch(0),
-    avgVolume(0), volumePos(0), buildUp(false), drop(false),
-    smoothedVolume(0), debounceCounter(0) {
+    : currentIndex(0), animationCount(0), lastSwitch(0),
+      avgVolume(0), volumePos(0), smoothedVolume(0), debounceCounter(0),
+      buildUp(false), drop(false) {
     memset(volumeHistory, 0, sizeof(volumeHistory));
     debugLog("HybridController initialized");
 }
@@ -23,7 +24,7 @@ void HybridController::addAnimation(HybridAnimation animation, const String& nam
         names[animationCount] = name;
         animationCount++;
         Serial.print("Added animation: ");
-        Serial.println(name);
+        debugLog(name);
     }
 }
 
@@ -51,111 +52,126 @@ bool HybridController::getDropFlag() {
     return drop;
 }
 
+String HybridController::getModeSwapReason() const {
+    return modeSwapReason;
+}
+
+String HybridController::getModeKeepReason() const {
+    return modeKeepReason;
+}
+
 bool HybridController::isBuildUp() {
     float delta = volumeHistory[(volumePos + 9) % 10] - volumeHistory[(volumePos + 5) % 10];
     buildUp = delta > 0.1;
-
-    if (buildUp) {
-        debugLog("isBuildUp true");
-    }
     return buildUp;
 }
 
 bool HybridController::isDrop() {
     float delta = volumeHistory[(volumePos + 9) % 10] - volumeHistory[(volumePos + 5) % 10];
     drop = delta < -0.15;
-    debugLog("isDrop evaluated");
     return drop;
 }
 
 bool HybridController::shouldSwitch(const AudioFeatures& features) {
-    if (!autoSwitchEnabled) return false;
-    unsigned long now = millis();
+    if (!autoSwitchEnabled) {
+        modeKeepReason = "Auto mode disabled";
+        return false;
+    }
 
     // Tempo-aware min switch time
-    float bpm = features.bpm > 0 ? features.bpm : 120;  // Fallback BPM
-    const unsigned long ABSOLUTE_MIN_DURATION = 6000; // Absolute minimum of 6 seconds
-    unsigned long tempoDuration = 1000 * (60.0 / bpm) * 8;  // Duration of 8 beats
-    unsigned long requiredDuration = max(ABSOLUTE_MIN_DURATION, tempoDuration);
+    unsigned long now = millis();
+    float bpm = features.bpm > 0 ? features.bpm : 120;
+    const unsigned long ABS_MIN = 6000;
+    unsigned long beatDuration = 1000 * (60.0 / bpm) * 8;
+    unsigned long requiredDelay = max(ABS_MIN, beatDuration);
 
-    bool enoughTimePassed = (now - lastSwitch) > requiredDuration;
+    bool enoughTimePassed = (now - lastSwitch) > requiredDelay;
 
-    // Debounce logic
     if (features.beatDetected) {
         debounceCounter++;
     } else {
         debounceCounter = 0;
-        modeKeepReason = "no beat";
+        modeKeepReason = "No beat";
     }
 
     bool beatStable = debounceCounter >= 3;
 
-    debugLog("Evaluating shouldSwitch");
-
     if (isBuildUp()) {
-        modeKeepReason = "Build up active";
         debounceCounter = 0;
-        debugLog("Build up active, not switching");
+        modeKeepReason = "Build-up detected";
         return false;
     }
 
-    if (isDrop() && now - lastSwitch < 10000) {
-        modeKeepReason = "isDrop 10000";
+    if (isDrop() && (now - lastSwitch) < 10000) {
         debounceCounter = 0;
-        debugLog("isDrop() and last switch was less than 10 seconds ago, not switching");
+        modeKeepReason = "Recent drop";
         return false;
     }
 
-    if (enoughTimePassed == false) {
-        modeKeepReason = "not enough time passed";
-        debugLog("Not enough time passed");
+    if (!enoughTimePassed) {
+        modeKeepReason = "Too early";
         return false;
     }
 
-    if (beatStable == false) {
-        modeKeepReason = "beat not stable";
-        debugLog("Beat not stable");
+    if (!beatStable) {
+        modeKeepReason = "Unstable beat";
         return false;
     }
 
-    return enoughTimePassed && beatStable;
+    modeSwapReason = "Stable beat + time passed";
+    return true;
 }
 
-
 void HybridController::switchAnimation() {
-    if (animationCount <= 1) return;
+    if (animationCount <= 1) return;  // Do nothing if there’s only one animation
 
     int newIndex = currentIndex;
-    while (newIndex == currentIndex) {
-        newIndex = random(animationCount);
+    if (!autoSwitchEnabled) {
+        // In manual mode, move to the next animation in sequence
+        newIndex = (currentIndex + 1) % animationCount;
+    } else {
+        // In automatic mode, pick a random animation (but avoid the current one)
+        while (newIndex == currentIndex) {
+            newIndex = random(animationCount);
+        }
     }
+
+    // Update the current animation
     currentIndex = newIndex;
     lastSwitch = millis();
     debounceCounter = 0;
     debugLog("Switched animation");
 }
 
+
 void HybridController::enableAutoSwitching() {
     autoSwitchEnabled = true;
+    debugLog("Auto-switching ENABLED");
 }
 
 void HybridController::disableAutoSwitching() {
     autoSwitchEnabled = false;
+    debugLog("Auto-switching DISABLED");
+}
+
+void HybridController::resetToFirst() {
+    currentIndex = 0;
+    lastSwitch = millis();
+    debounceCounter = 0;
+    debugLog("Reset to first animation");
 }
 
 void HybridController::update(CRGB* leds, int numLeds, const AudioFeatures& features) {
-
     debugLog("Update called");
 
-    // Apply low-pass filter to smooth volume
-    const float alpha = 0.2; // Smoothing factor
-    smoothedVolume = alpha * features.volume + (1 - alpha) * smoothedVolume;
+    // Low-pass smoothing of volume
+    const float alpha = 0.2;
+    smoothedVolume = alpha * features.volume + (1.0f - alpha) * smoothedVolume;
 
-    // Update volume history
+    // Update rolling history
     volumeHistory[volumePos] = smoothedVolume;
     volumePos = (volumePos + 1) % 10;
 
-    // Calculate average volume
     avgVolume = 0;
     for (int i = 0; i < 10; i++) {
         avgVolume += volumeHistory[i];
@@ -170,12 +186,3 @@ void HybridController::update(CRGB* leds, int numLeds, const AudioFeatures& feat
         animations[currentIndex](leds, numLeds, features);
     }
 }
-
-void HybridController::resetToFirst() {
-    currentIndex = 0;
-    lastSwitch = millis();
-    debounceCounter = 0;
-    Serial.println("Reset to first animation.");
-    debugLog("Reset to first animation");
-}
-
